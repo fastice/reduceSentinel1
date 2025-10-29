@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reduceSentinel1"
+version = "0.0.1"
+description = "Remove unneeded data from and S1 product"
+authors = [
+    { name = "Ian Joughin", email = "irj@uw.edu" }
+]
+license = { text = "MIT" }
+readme = "README.md"
+keywords = ["SAR", "Sentinel1"]
+requires-python = ">=3.8"
+
+dependencies = [
+    "argparse"
+]
+
+[tool.setuptools]
+packages = ["reduces1"]
+
+[project.urls]
+Homepage = "https://github.com/fastice/reduceSentinel1"
+Repository = "https://github.com/fastice/reduceSentinel1"
+
+[project.scripts]
+reduces1 = "reduces1.reduceSentinel1:main"
+
