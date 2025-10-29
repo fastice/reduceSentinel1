@@ -5,6 +5,8 @@ If zip/unzip is available as a command line call, it will be used to delete the 
 
 **It has been tested successfully on both Sentinel 1 SLC and L0 products.**
 
+Note: zip warnings about directory mismatch do not seem to cause any problem with retrieving data from the reduced file.
+
 # Installation
 
 This utility can be installed with: 
