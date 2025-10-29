@@ -3,11 +3,13 @@ This will remove data with a pattern from Sentinel1 zip files (e.g., all hv file
 
 If zip/unzip is available as a command line call, it will be used to delete the unwanted data (~<10s for an L0 SLC on a fast raid). If not, the data will be removed with python, which is about 3x slower.
 
+**It has been tested successfully on both Sentinel 1 SLC and L0 products.**
+
 # Installation
 
 This utility can be installed with: 
 ```bash
-pip 
+pip install git+https://github.com/fastice/reduceSentinel1.git@main
 ```
 # Usage
 
