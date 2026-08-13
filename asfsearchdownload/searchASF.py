@@ -464,7 +464,7 @@ def _default_search_area():
     fallback for Python 3.8.
     """
     try:
-        ref = importlib.resources.files('reduces1.searchRegions').joinpath(
+        ref = importlib.resources.files('asfsearchdownload.searchRegions').joinpath(
             'Greenland.lonlat'
         )
         return str(ref)
@@ -688,8 +688,9 @@ Part of the asfSearchAndDownload package.
     parser.add_argument(
         '--sensor',
         choices=['NISAR', 'SENTINEL1'],
-        default='NISAR',
-        help='Platform to search (default: NISAR)',
+        default=None,
+        help='Platform to search (default: inferred from --products if '
+             'given, else NISAR)',
     )
 
     # --- products ---
@@ -707,6 +708,15 @@ Part of the asfSearchAndDownload package.
         metavar='MODE',
         help='Beam mode(s) — Sentinel-1 only (default: IW); '
              'choices: ' + ' '.join(_S1_BEAM_MODES),
+    )
+
+    # --- flight direction ---
+    parser.add_argument(
+        '--flightDirection', type=str.upper, default=None,
+        choices=['ASCENDING', 'DESCENDING'],
+        metavar='DIR',
+        help='Restrict to a single flight direction (ASCENDING or DESCENDING); '
+             'default: both',
     )
 
     # --- NISAR bandwidth ---
@@ -780,6 +790,16 @@ Part of the asfSearchAndDownload package.
         '--archiveDir', default=None, metavar='GLOB',
         help='Glob pattern for already-downloaded files, e.g. \'/data/NISAR/*\' '
              '(quote wildcards to prevent shell expansion). '
+             'A directory hit (e.g. a bare \'.\') is expanded exactly one '
+             'level to the files directly inside it -- NOT recursive, and '
+             'any subdirectories found at that level are skipped, not '
+             'descended into. If your archive is laid out in per-product '
+             'subdirectories (e.g. ./RUNW/*.h5, ./ROFF/*.h5), pass a glob '
+             'that reaches those files directly, e.g. \'./*/*\' -- a plain '
+             '\'.\' will NOT see into them. Brace patterns like '
+             '\'./{RUNW,ROFF}/*\' are NOT supported: this is passed straight '
+             'to Python glob, which does not expand braces, and quoting stops '
+             'the shell from expanding them either -- use \'./*/*\'. '
              'Extensions .h5 / .zip / .zip.1 are stripped before comparison. '
              'Matching products are skipped; for NISAR, if a newer processor '
              'version exists the URL is written to <archived_file>.updated '
@@ -808,6 +828,20 @@ Part of the asfSearchAndDownload package.
     # ------------------------------------------------------------------
     # Apply sensor-specific defaults and cross-validate
     # ------------------------------------------------------------------
+
+    # --sensor not given: infer it from --products (e.g. --products ROFF RUNW
+    # with no --sensor means NISAR; --products SLC means SENTINEL1) so a
+    # forgotten --sensor doesn't silently fall back to the wrong platform's
+    # default. Falls back to NISAR when --products is also absent, or when
+    # the given products don't unambiguously match one sensor (existing
+    # validation below will then report the real mismatch).
+    if args.sensor is None:
+        if args.products:
+            matches = [s for s, info in _SENSOR_PRODUCTS.items()
+                      if all(p in info['choices'] for p in args.products)]
+            args.sensor = matches[0] if len(matches) == 1 else 'NISAR'
+        else:
+            args.sensor = 'NISAR'
 
     # Products default depends on sensor
     if args.products is None:
@@ -917,6 +951,9 @@ Part of the asfSearchAndDownload package.
         maxResults=MAX_RESULTS,
         opts=opts,
     )
+    # flightDirection applies to both platforms; None means no constraint.
+    if args.flightDirection:
+        _common['flightDirection'] = args.flightDirection
 
     spinner = _Spinner(f'Searching ASF ({args.sensor})...').start()
     try:
@@ -962,19 +999,23 @@ Part of the asfSearchAndDownload package.
             continue
         track      = _to_int(props.get('pathNumber'))
         frame      = _to_int(props.get('frameNumber'))
-        # bytes dict: {filename: {'bytes': N, 'format': '...'}, ...}
-        bytes_dict = props.get('bytes') or {}
+        # 'bytes' is a dict {filename: {'bytes': N, 'format': '...'}, ...} for
+        # NISAR, but a plain integer (total granule size) for Sentinel-1.
+        bytes_val  = props.get('bytes')
         url_base   = os.path.basename(url)
-        if url_base in bytes_dict:
-            size_bytes = bytes_dict[url_base].get('bytes', 0) or 0
+        if isinstance(bytes_val, dict):
+            if url_base in bytes_val:
+                size_bytes = bytes_val[url_base].get('bytes', 0) or 0
+            else:
+                # fallback: first .h5 entry
+                size_bytes = next(
+                    (info.get('bytes', 0) or 0
+                     for fname, info in bytes_val.items()
+                     if fname.endswith('.h5')),
+                    0,
+                )
         else:
-            # fallback: first .h5 entry
-            size_bytes = next(
-                (info.get('bytes', 0) or 0
-                 for fname, info in bytes_dict.items()
-                 if fname.endswith('.h5')),
-                0,
-            )
+            size_bytes = _to_int(bytes_val) or 0
         all_items.append((url, track, frame, size_bytes, None))
     print(f'ASF public: {len(results)} granule(s) found')
 

@@ -248,7 +248,9 @@ def write_search_gpkg(gpkg_path, records):
             feat = ogr.Feature(layer_defn)
 
             # Geometry — reproject from WGS84 to target CRS if needed
-            geom = ogr.CreateGeometryFromJson(json.dumps(rec['geometry']))
+            # default=list coerces shapely CoordinateSequence objects (leaked by
+            # asf_search's NISAR dateline-merge path) into JSON-serializable lists.
+            geom = ogr.CreateGeometryFromJson(json.dumps(rec['geometry'], default=list))
             if geom is None:
                 continue
             if _transform:
